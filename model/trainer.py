@@ -7,7 +7,9 @@ from vietocr.tool.translate import translate, batch_translate_beam_search
 from vietocr.tool.utils import download_weights
 from vietocr.tool.logger import Logger
 from vietocr.loader.aug import ImgAugTransform, ImgAugTransformV2
-
+from matplotlib.backends.backend_pdf import PdfPages
+from PIL import Image
+from matplotlib import patches
 import yaml
 import torch
 from vietocr.loader.dataloader_v1 import DataGen
@@ -19,7 +21,6 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, OneCycleLR
 import torchvision 
 
 from vietocr.tool.utils import compute_accuracy
-from PIL import Image
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -361,3 +362,62 @@ class Trainer():
         loss_item = loss.item()
 
         return loss_item
+
+    def vi_pre(self, sample=16, errorcase=False, fontname='serif', fontsize=16, pdf_filename='wrong_predictions.pdf'):
+        # Lấy kết quả dự đoán
+        pred_sents, actual_sents, img_files, probs = self.predict(sample)
+
+        # Nếu errorcase=True, chỉ lấy những trường hợp dự đoán sai
+        if errorcase:
+            wrongs = []
+            for i in range(len(img_files)):
+                if pred_sents[i] != actual_sents[i]:
+                    wrongs.append(i)
+
+            # Chỉ lấy những mẫu sai
+            pred_sents = [pred_sents[i] for i in wrongs]
+            actual_sents = [actual_sents[i] for i in wrongs]
+            img_files = [img_files[i] for i in wrongs]
+            probs = [probs[i] for i in wrongs]
+
+        # Giới hạn số lượng ảnh dựa trên tham số sample
+        img_files = img_files[:sample]
+
+        fontdict = {
+            'family': fontname,
+            'size': fontsize
+        }
+
+        # Mở file PDF để lưu kết quả
+        with PdfPages(pdf_filename) as pdf:
+            for vis_idx in range(0, len(img_files)):
+                img_path = img_files[vis_idx]
+                pred_sent = pred_sents[vis_idx]
+                actual_sent = actual_sents[vis_idx]
+                prob = probs[vis_idx]
+
+                # Đọc và hiển thị hình ảnh
+                img = Image.open(open(img_path, 'rb'))
+                plt.figure(figsize=(8, 10))  # Tăng kích thước figure để có nhiều không gian hơn
+                plt.imshow(img)
+                plt.axis('off')
+
+                # So sánh và bôi đỏ các ký tự sai trong pred
+                highlighted_pred = ""
+                for a_char, p_char in zip(actual_sent, pred_sent):
+                    if a_char != p_char:
+                        highlighted_pred += f"\\textcolor{{red}}{{{p_char}}}"
+                    else:
+                        highlighted_pred += p_char
+                highlighted_pred += pred_sent[len(actual_sent):]  # Thêm phần còn lại nếu pred dài hơn actual
+
+                # Đặt title cho từng phần
+                plt.title(f"Actual: {actual_sent}", loc='center', fontdict=fontdict)
+                plt.suptitle(f"Pred: {highlighted_pred}", fontsize=fontsize, y=0.92, fontfamily=fontname)  # Bố trí pred bên dưới actual
+                plt.figtext(0.5, 0.05, f"Probability: {prob:.3f}", ha="center", fontsize=fontsize, fontfamily=fontname)
+
+                # Lưu hình ảnh hiện tại vào PDF
+                pdf.savefig()  # Lưu hình ảnh vào trang hiện tại của PDF
+                plt.close()  # Đóng figure để tránh hiển thị trên màn hình
+
+        print(f"Wrong predictions have been saved to {pdf_filename}")
