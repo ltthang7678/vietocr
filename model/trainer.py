@@ -18,7 +18,6 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, OneCycleLR
 
 import torchvision 
 
-from matplotlib.backends.backend_pdf import PdfPages
 from vietocr.tool.utils import compute_accuracy
 from PIL import Image
 import numpy as np
@@ -362,51 +361,3 @@ class Trainer():
         loss_item = loss.item()
 
         return loss_item
-    
-
-
-    def visualize_prediction(self, sample=16, errorcase=False, fontname='serif', fontsize=16, pdf_filename='wrong_predictions.pdf'):
-        # Lấy kết quả dự đoán
-        pred_sents, actual_sents, img_files, probs = self.predict(sample)
-
-        # Nếu errorcase=True, chỉ lấy những trường hợp dự đoán sai
-        if errorcase:
-            wrongs = []
-            for i in range(len(img_files)):
-                if pred_sents[i] != actual_sents[i]:
-                    wrongs.append(i)
-
-            # Chỉ lấy những mẫu sai
-            pred_sents = [pred_sents[i] for i in wrongs]
-            actual_sents = [actual_sents[i] for i in wrongs]
-            img_files = [img_files[i] for i in wrongs]
-            probs = [probs[i] for i in wrongs]
-
-        # Giới hạn số lượng ảnh dựa trên tham số sample
-        img_files = img_files[:sample]
-
-        fontdict = {
-            'family': fontname,
-            'size': fontsize
-        }
-
-        # Mở file PDF để lưu kết quả
-        with PdfPages(pdf_filename) as pdf:
-            for vis_idx in range(0, len(img_files)):
-                img_path = img_files[vis_idx]
-                pred_sent = pred_sents[vis_idx]
-                actual_sent = actual_sents[vis_idx]
-                prob = probs[vis_idx]
-
-                # Đọc và hiển thị hình ảnh
-                img = Image.open(open(img_path, 'rb'))
-                plt.figure()
-                plt.imshow(img)
-                plt.title('prob: {:.3f} - pred: {} - actual: {}'.format(prob, pred_sent, actual_sent), loc='left', fontdict=fontdict)
-                plt.axis('off')
-
-                # Lưu hình ảnh hiện tại vào PDF
-                pdf.savefig()  # Lưu hình ảnh vào trang hiện tại của PDF
-                plt.close()  # Đóng figure để tránh hiển thị trên màn hình
-
-        print(f"Wrong predictions have been saved to {pdf_filename}")
