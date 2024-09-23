@@ -118,65 +118,38 @@ class OCRDataset(Dataset):
         return self.nSamples
 
 class ClusterRandomSampler(Sampler):
-
+    
     def __init__(self, data_source, batch_size, shuffle=True):
         self.data_source = data_source
         self.batch_size = batch_size
-        self.shuffle = shuffle
+        self.shuffle = shuffle        
 
     def flatten_list(self, lst):
         return [item for sublist in lst for item in sublist]
+
     def __iter__(self):
         batch_lists = []
-        leftover = []  # Dùng để lưu các batch lẻ
-
-        # Lặp qua từng cluster và danh sách các chỉ mục trong đó
         for cluster, cluster_indices in self.data_source.cluster_indices.items():
             if self.shuffle:
                 random.shuffle(cluster_indices)
 
-            # Chia chỉ mục thành các batch với kích thước batch_size
             batches = [cluster_indices[i:i + self.batch_size] for i in range(0, len(cluster_indices), self.batch_size)]
-            
-            # Tách các batch lẻ có kích thước nhỏ hơn batch_size
-            full_batches = [b for b in batches if len(b) == self.batch_size]
-            leftover_batches = [b for b in batches if len(b) < self.batch_size]
-            
-            batch_lists.append(full_batches)
-            leftover.extend(leftover_batches)
+            batches = [_ for _ in batches if len(_) == self.batch_size]
+            if self.shuffle:
+                random.shuffle(batches)
 
-        # Gom các batch lẻ lại thành các batch lớn hơn
-        combined_batches = self.combine_leftover_batches(leftover, self.batch_size)
-        batch_lists.append(combined_batches)
+            batch_lists.append(batches)
 
-        # Làm phẳng danh sách các batch thành một danh sách đơn lẻ
         lst = self.flatten_list(batch_lists)
-
         if self.shuffle:
             random.shuffle(lst)
 
-        # Trả về iterator của danh sách đã làm phẳng
+        lst = self.flatten_list(lst)
+
         return iter(lst)
 
-    def combine_leftover_batches(self, leftover_batches, batch_size):
-        """
-        Gom các batch lẻ lại với nhau để tạo thành các batch có kích thước batch_size.
-        Nếu còn lẻ, tạo batch nhỏ với phần còn lại.
-        """
-        combined = []
-        temp_batch = []
-
-        for batch in leftover_batches:
-            temp_batch.extend(batch)
-            while len(temp_batch) >= batch_size:
-                combined.append(temp_batch[:batch_size])
-                temp_batch = temp_batch[batch_size:]
-
-        # Nếu còn phần lẻ, tạo batch nhỏ với phần còn lại
-        if temp_batch:
-            combined.append(temp_batch)
-
-        return combined
+    def __len__(self):
+        return len(self.data_source)
 
 class Collator(object):
     def __init__(self, masked_language_model=True):
